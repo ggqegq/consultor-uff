@@ -511,7 +511,7 @@ if submitted:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #888; font-size: 0.9rem;">
-    Desenvolvido para consulta ao Quadro de Horários da UFF<br>
-    Versão sem Selenium - compatível com Streamlit Cloud
+    Desenvolvido por Tadeu L. Araujo<br>
+    Versão 1.0 - compatível com Streamlit Cloud
 </div>
 """, unsafe_allow_html=True)

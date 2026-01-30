@@ -175,13 +175,9 @@ class ConsultorQuadroHorariosUFF:
                 
         return list(todos_links)
 
-    def extrair_dados_turma(self, url_turma, periodo, curso_alvo):
-        """Extrai dados de uma turma específica."""
+    def extrair_dados_turma_por_curso(self, url_turma, periodo, curso_alvo):
+        """Extrai dados de uma turma específica para um curso específico."""
         try:
-            if url_turma in self.links_processados:
-                return None
-            self.links_processados.add(url_turma)
-            
             response = self.session.get(url_turma, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -216,7 +212,7 @@ class ConsultorQuadroHorariosUFF:
             except Exception:
                 pass
             
-            # Extrair vagas
+            # Extrair vagas para o curso específico
             vagas_info = None
             try:
                 h5_vagas = soup.find('h5', string=re.compile('Vagas Alocadas'))
@@ -230,10 +226,13 @@ class ConsultorQuadroHorariosUFF:
                                 curso_nome = cols[0].text.strip()
                                 match_curso = False
                                 
-                                if curso_alvo == 'Química' and ('028' in curso_nome or 'Química' in curso_nome and 'Industrial' not in curso_nome):
-                                    match_curso = True
-                                if curso_alvo == 'Química Industrial' and ('029' in curso_nome or 'Industrial' in curso_nome):
-                                    match_curso = True
+                                # Verificação mais precisa do curso
+                                if curso_alvo == 'Química':
+                                    if '028' in curso_nome or ('Química' in curso_nome and 'Industrial' not in curso_nome):
+                                        match_curso = True
+                                elif curso_alvo == 'Química Industrial':
+                                    if '029' in curso_nome or 'Industrial' in curso_nome:
+                                        match_curso = True
                                     
                                 if match_curso:
                                     vagas_info = {
@@ -251,6 +250,7 @@ class ConsultorQuadroHorariosUFF:
             
             return {
                 'periodo': periodo,
+                'curso': curso_alvo,  # Adicionando o curso nos dados
                 'depto': depto,
                 'codigo': codigo,
                 'disciplina': nome,
@@ -275,7 +275,9 @@ class ConsultorQuadroHorariosUFF:
                 progress_bar.progress(progress)
                 status_text.text(f"Buscando {curso} em {periodo[:4]}.{periodo[4]}...")
                 
-                self.links_processados.clear()
+                # Criar um set separado para controlar links já processados NESTE curso/período
+                links_processados_neste_ciclo = set()
+                
                 id_curso = self.ids_cursos.get(curso, '28')
                 deptos = self.departamentos_filtro if self.departamentos_filtro else [None]
                 
@@ -294,7 +296,12 @@ class ConsultorQuadroHorariosUFF:
                     progress_bar.progress(min(progress, 0.99))
                     status_text.text(f"Processando turma {idx+1}/{total_links} de {curso} ({periodo[:4]}.{periodo[4]})...")
                     
-                    dado = self.extrair_dados_turma(link, periodo, curso)
+                    # Evitar processar o mesmo link duas vezes no mesmo ciclo curso/período
+                    if link in links_processados_neste_ciclo:
+                        continue
+                    links_processados_neste_ciclo.add(link)
+                    
+                    dado = self.extrair_dados_turma_por_curso(link, periodo, curso)
                     if dado:
                         dados_brutos.append(dado)
                     
@@ -333,7 +340,7 @@ class ConsultorQuadroHorariosUFF:
         ]
         
         # Cabeçalhos fixos
-        headers_row1 = ["Depto", "Código", "Disciplina", "Turma"]
+        headers_row1 = ["Curso", "Depto", "Código", "Disciplina", "Turma"]
         for col_idx, text in enumerate(headers_row1, 1):
             cell = ws.cell(row=1, column=col_idx, value=text)
             ws.merge_cells(start_row=1, start_column=col_idx, end_row=2, end_column=col_idx)
@@ -343,7 +350,7 @@ class ConsultorQuadroHorariosUFF:
             cell.border = border
         
         # Cabeçalhos de períodos
-        current_col = 5
+        current_col = 6
         for per in periodos_ordenados:
             per_fmt = f"{per[:4]}.{per[4]}"
             cell = ws.cell(row=1, column=current_col, value=per_fmt)
@@ -361,17 +368,17 @@ class ConsultorQuadroHorariosUFF:
                 sub_cell.border = border
                 current_col += 1
         
-        # Dados
-        grouped = df.groupby(['depto', 'codigo', 'disciplina', 'turma'])
+        # Dados - agrupando por curso também
+        grouped = df.groupby(['curso', 'depto', 'codigo', 'disciplina', 'turma'])
         row_num = 3
         
         for name, group in grouped:
             for i, val in enumerate(name, 1):
                 cell = ws.cell(row=row_num, column=i, value=val)
                 cell.border = border
-                cell.alignment = center if i != 3 else Alignment(horizontal='left', vertical='center')
+                cell.alignment = center if i != 4 else Alignment(horizontal='left', vertical='center')
             
-            col_idx = 5
+            col_idx = 6
             for per in periodos_ordenados:
                 dados_periodo = group[group['periodo'] == per]
                 if not dados_periodo.empty:
@@ -389,10 +396,11 @@ class ConsultorQuadroHorariosUFF:
             row_num += 1
         
         # Ajustar larguras
-        ws.column_dimensions['A'].width = 8
-        ws.column_dimensions['B'].width = 12
-        ws.column_dimensions['C'].width = 35
-        ws.column_dimensions['D'].width = 8
+        ws.column_dimensions['A'].width = 18  # Curso
+        ws.column_dimensions['B'].width = 8   # Depto
+        ws.column_dimensions['C'].width = 12  # Código
+        ws.column_dimensions['D'].width = 35  # Disciplina
+        ws.column_dimensions['E'].width = 8   # Turma
         
         buffer = io.BytesIO()
         wb.save(buffer)

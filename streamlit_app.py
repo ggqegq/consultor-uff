@@ -413,7 +413,7 @@ st.markdown('<p class="main-header">Consultor de Quadro de Horários UFF</p>', u
 st.markdown('<p class="sub-header">Gere planilhas comparativas de vagas e horários dos cursos de Química</p>', unsafe_allow_html=True)
 
 # Aviso sobre método
-st.info("Para consultar um departamento específico digite  a sigla (Ex. GQA, GQI, GQO etc)!")
+st.info("Para consultar um departamento específico digite  a sigla (Ex. GQA, GQI, GQO etc)! Caso deseje listar todos os departamentos deixe em branco (mais demorado).")
 
 # Formulário
 with st.form("consulta_form"):
